@@ -99,7 +99,7 @@ jobs:
         
         aws cloudformation create-stack \
           --stack-name globoclima-dev \
-          --template-body file://infrastructure/simple-stack.yml \
+          --template-body file://infrastructure/deploy.yml \
           --parameters \
             ParameterKey=JWTSecret,ParameterValue="${{ secrets.JWT_SECRET }}" \
             ParameterKey=OpenWeatherMapApiKey,ParameterValue="${{ secrets.OPENWEATHERMAP_API_KEY }}" \
