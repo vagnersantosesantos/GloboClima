@@ -1,95 +1,52 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-Description: 'GloboClima - Deploy Free Tier'
+name: Deploy GloboClima
 
-Parameters:
-  Environment:
-    Type: String
-    Default: 'dev'
-  
-  JWTSecret:
-    Type: String
-    NoEcho: true
-  
-  OpenWeatherMapApiKey:
-    Type: String
-    NoEcho: true
+on:
+  push:
+    branches:
+      - main
+      - develop
 
-Resources:
-  # DynamoDB Table
-  UsersTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub 'GloboClima-Users-${Environment}'
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: Id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: Id
-          KeyType: HASH
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-  ApiFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub 'globoclima-${Environment}'
-      Runtime: provided.al2023  # Runtime customizado para .NET 9
-      CodeUri: ../../src/GloboClima.Lambda/bin/Release/net9.0/linux-x64/publish/
-      Handler: bootstrap
-      MemorySize: 256  # Aumentado um pouco
-      Timeout: 30
-      Environment:
-        Variables:
-          DYNAMODB_TABLE_NAME: !Ref UsersTable
-          JWT__SECRET: !Ref JWTSecret
-          JWT__ISSUER: 'GloboClima'
-          JWT__AUDIENCE: 'GloboClima-Users'
-          OPENWEATHERMAP__APIKEY: !Ref OpenWeatherMapApiKey
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UsersTable
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Path: /{proxy+}
-            Method: ANY
-        RootEvent:
-          Type: Api  
-          Properties:
-            Path: /
-            Method: ANY
+    env:
+      AWS_REGION: us-east-1
 
-  # S3 para Frontend
-  FrontendBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'globoclima-${Environment}-${AWS::AccountId}'
-      WebsiteConfiguration:
-        IndexDocument: index.html
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref FrontendBucket
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action: s3:GetObject
-            Resource: !Sub '${FrontendBucket}/*'
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
 
-Outputs:
-  ApiUrl:
-    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
-    
-  FrontendUrl:
-    Value: !Sub 'http://${FrontendBucket}.s3-website-${AWS::Region}.amazonaws.com'
-    
-  BucketName:
-    Value: !Ref FrontendBucket
+      - name: Build Lambda
+        working-directory: src/GloboClima.Lambda
+        run: |
+          dotnet publish -c Release -r linux-x64 --self-contained false
+
+      - name: SAM Deploy
+        working-directory: infrastructure/cloudformation
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            ENVIRONMENT=prod
+            STACK_NAME=GloboClimaStack-Prod
+          else
+            ENVIRONMENT=dev
+            STACK_NAME=GloboClimaStack-Dev
+          fi
+
+          sam deploy \
+            --template-file template.yaml \
+            --stack-name $STACK_NAME \
+            --capabilities CAPABILITY_IAM \
+            --resolve-s3 \
+            --region $AWS_REGION \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides Environment=$ENVIRONMENT \
+                                   JWTSecret=${{ secrets.JWT_SECRET_$ENVIRONMENT }} \
+                                   OpenWeatherMapApiKey=${{ secrets.OWM_API_KEY_$ENVIRONMENT }}
