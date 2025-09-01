@@ -10,8 +10,8 @@ on:
       - main
   workflow_dispatch: 
 
-env:
-  AWS_REGION: us-east-1
+# env:
+#   AWS_REGION: us-east-1
 
 jobs:
   deploy:
