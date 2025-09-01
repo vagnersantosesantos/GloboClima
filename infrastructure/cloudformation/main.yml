@@ -60,37 +60,36 @@ Resources:
             Resource: !Sub '${FrontendBucket}/*'
 
   # Lambda Function (CORRIGIDO)
-  ApiFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub 'globoclima-${Environment}'
-      Runtime: provided.al2023
-      CodeUri: ../src/GloboClima.Lambda/publish/
-      Handler: bootstrap
-      MemorySize: 256
-      Timeout: 30
-      Environment:
-        Variables:
-          DYNAMODB_TABLE_NAME: !Ref UsersTable
-          JWT__SECRET: !Ref JWTSecret
-          JWT__ISSUER: 'GloboClima'
-          JWT__AUDIENCE: 'GloboClima-Users'
-          OPENWEATHERMAP__APIKEY: !Ref OpenWeatherMapApiKey
-          # ✅ AWS_REGION removido - Lambda tem acesso automático via context
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UsersTable
-      Events:
-        ProxyResource:
-          Type: Api
-          Properties:
-            Path: /{proxy+}
-            Method: ANY
-        RootResource:
-          Type: Api
-          Properties:
-            Path: /
-            Method: ANY
+ApiFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    FunctionName: 'globoclima-dev'
+    Runtime: dotnet9
+    Handler: GloboClima.Lambda::GloboClima.Lambda.LambdaEntryPoint::FunctionHandlerAsync
+    CodeUri: ./src/GloboClima.Lambda/bin/Release/net9.0/linux-x64/publish/ 
+    MemorySize: 256
+    Timeout: 30
+    Environment:
+      Variables:
+        DYNAMODB_TABLE_NAME: !Ref UsersTable
+        JWT__SECRET: !Ref JWTSecret
+        JWT__ISSUER: 'GloboClima'
+        JWT__AUDIENCE: 'GloboClima-Users'
+        OPENWEATHERMAP__APIKEY: !Ref OpenWeatherMapApiKey
+    Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref UsersTable
+    Events:
+      ApiEvent:
+        Type: Api
+        Properties:
+          Path: /{proxy+}
+          Method: ANY
+      RootEvent:
+        Type: Api
+        Properties:
+          Path: /
+          Method: ANY
 
 Outputs:
   ApiUrl:
