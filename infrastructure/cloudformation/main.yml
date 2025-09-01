@@ -16,7 +16,6 @@ Parameters:
     NoEcho: true
 
 Resources:
-  # DynamoDB Table
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -33,10 +32,10 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'globoclima-${Environment}'
-      Runtime: provided.al2023  # Runtime customizado para .NET 9
-      CodeUri: ../../src/GloboClima.Lambda/bin/Release/net9.0/linux-x64/publish/
+      Runtime: provided.al2023
+      CodeUri: ../src/GloboClima.Lambda/publish/
       Handler: bootstrap
-      MemorySize: 256  # Aumentado um pouco
+      MemorySize: 256
       Timeout: 30
       Environment:
         Variables:
@@ -55,12 +54,11 @@ Resources:
             Path: /{proxy+}
             Method: ANY
         RootEvent:
-          Type: Api  
+          Type: Api
           Properties:
             Path: /
             Method: ANY
 
-  # S3 para Frontend
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:

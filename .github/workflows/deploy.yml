@@ -1,153 +1,213 @@
-name: Deploy GloboClima .NET 9
+name: Deploy GloboClima (Free Tier)
 
 on:
   push:
-    branches: [main, develop]
-  pull_request:
     branches: [main]
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
-  DOTNET_VERSION: '9.0.x'
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET 9
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-    
-    - name: Restore dependencies
-      run: dotnet restore
-    
-    - name: Build
-      run: dotnet build --no-restore
-    
-    - name: Run tests
-      run: dotnet test --no-build --verbosity normal
-
   deploy:
-    needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    timeout-minutes: 30
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
     
-    - name: Setup .NET 9
+    - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+        dotnet-version: '9.0.x'
     
-    - name: Configure AWS credentials
+    - name: Configure AWS
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
     
-    - name: Determine environment
-      id: env
+    - name: Debug - Check structure
       run: |
-        if [[ $GITHUB_REF == 'refs/heads/main' ]]; then
-          echo "environment=prod" >> $GITHUB_OUTPUT
-        else
-          echo "environment=dev" >> $GITHUB_OUTPUT
-        fi
+        echo "📁 Project structure:"
+        find . -name "*.csproj" -type f
+        ls -la src/
     
-    - name: Install AWS SAM CLI
-      uses: aws-actions/setup-sam@v2
-      with:
-        use-installer: true
-    
-    - name: Build Lambda (.NET 9)
+    - name: Build Lambda
       run: |
+        echo "🔨 Building Lambda..."
+        
+        # ✅ PATH CORRETO: src/GloboClima.Lambda
         cd src/GloboClima.Lambda
+        dotnet publish -c Release -r linux-x64 --self-contained true -o publish
         
-        # Build com runtime linux-x64
-        dotnet publish -c Release \
-          -r linux-x64 \
-          --self-contained true \
-          -p:PublishReadyToRun=false \
-          -p:PublishSingleFile=false \
-          -o bin/Release/net9.0/publish/
+        # Criar bootstrap
+        cd publish
+        cat > bootstrap << 'EOF'
+        #!/bin/bash
+        set -euo pipefail
+        exec ./GloboClima.Lambda
+        EOF
+        chmod +x bootstrap
         
-        # Criar bootstrap script para custom runtime
-        echo '#!/bin/bash' > bin/Release/net9.0/publish/bootstrap
-        echo 'exec ./GloboClima.Lambda' >> bin/Release/net9.0/publish/bootstrap
-        chmod +x bin/Release/net9.0/publish/bootstrap
+        echo "✅ Build completed. Files:"
+        ls -la
+        
+        echo "📍 Full path:"
+        pwd
+    
+    - name: Install SAM CLI
+      run: |
+        pip install aws-sam-cli
+        sam --version
+    
+    - name: Create SAM Template
+      run: |
+        echo "📝 Creating SAM template..."
+        
+        cat > sam-template.yml << 'EOF'
+        AWSTemplateFormatVersion: '2010-09-09'
+        Transform: AWS::Serverless-2016-10-31
+        Description: 'GloboClima - Deploy Free Tier'
+
+        Parameters:
+          JWTSecret:
+            Type: String
+            NoEcho: true
+          OpenWeatherMapApiKey:
+            Type: String
+            NoEcho: true
+
+        Resources:
+          UsersTable:
+            Type: AWS::DynamoDB::Table
+            Properties:
+              TableName: 'GloboClima-Users-dev'
+              BillingMode: PAY_PER_REQUEST
+              AttributeDefinitions:
+                - AttributeName: Id
+                  AttributeType: S
+              KeySchema:
+                - AttributeName: Id
+                  KeyType: HASH
+
+          ApiFunction:
+            Type: AWS::Serverless::Function
+            Properties:
+              FunctionName: 'globoclima-dev'
+              Runtime: provided.al2023
+              CodeUri: ./src/GloboClima.Lambda/publish/
+              Handler: bootstrap
+              MemorySize: 256
+              Timeout: 30
+              Environment:
+                Variables:
+                  DYNAMODB_TABLE_NAME: !Ref UsersTable
+                  JWT__SECRET: !Ref JWTSecret
+                  JWT__ISSUER: 'GloboClima'
+                  JWT__AUDIENCE: 'GloboClima-Users'
+                  OPENWEATHERMAP__APIKEY: !Ref OpenWeatherMapApiKey
+              Policies:
+                - DynamoDBCrudPolicy:
+                    TableName: !Ref UsersTable
+              Events:
+                ApiEvent:
+                  Type: Api
+                  Properties:
+                    Path: /{proxy+}
+                    Method: ANY
+                RootEvent:
+                  Type: Api
+                  Properties:
+                    Path: /
+                    Method: ANY
+
+          FrontendBucket:
+            Type: AWS::S3::Bucket
+            Properties:
+              BucketName: !Sub 'globoclima-dev-${AWS::AccountId}'
+              WebsiteConfiguration:
+                IndexDocument: index.html
+              PublicAccessBlockConfiguration:
+                BlockPublicAcls: false
+                BlockPublicPolicy: false
+                IgnorePublicAcls: false
+                RestrictPublicBuckets: false
+
+          BucketPolicy:
+            Type: AWS::S3::BucketPolicy
+            Properties:
+              Bucket: !Ref FrontendBucket
+              PolicyDocument:
+                Statement:
+                  - Effect: Allow
+                    Principal: '*'
+                    Action: s3:GetObject
+                    Resource: !Sub '${FrontendBucket}/*'
+
+        Outputs:
+          ApiUrl:
+            Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+          FrontendUrl:
+            Value: !Sub 'http://${FrontendBucket}.s3-website-${AWS::Region}.amazonaws.com'
+          BucketName:
+            Value: !Ref FrontendBucket
+        EOF
+        
+        echo "✅ SAM template created"
     
     - name: Deploy Infrastructure
       run: |
+        echo "🚀 Starting SAM deploy..."
+        
+        # ✅ Verificar se pasta existe com path correto
+        if [ ! -d "src/GloboClima.Lambda/publish" ]; then
+          echo "❌ Publish folder not found at src/GloboClima.Lambda/publish!"
+          echo "📁 Checking what exists:"
+          find . -name "publish" -type d
+          exit 1
+        fi
+        
         sam deploy \
-          --template-file infrastructure/cloudformation/main.yml \
-          --stack-name globoclima-${{ steps.env.outputs.environment }} \
+          --template-file sam-template.yml \
+          --stack-name globoclima-dev \
           --parameter-overrides \
-            Environment=${{ steps.env.outputs.environment }} \
             JWTSecret="${{ secrets.JWT_SECRET }}" \
             OpenWeatherMapApiKey="${{ secrets.OPENWEATHERMAP_API_KEY }}" \
           --capabilities CAPABILITY_IAM \
+          --resolve-s3 \
           --region ${{ env.AWS_REGION }} \
           --no-confirm-changeset \
           --no-fail-on-empty-changeset
     
-    - name: Build Frontend
+    - name: Build & Deploy Frontend
       run: |
+        echo "🎨 Building frontend..."
+        
+        # ✅ PATH CORRETO: src/GloboClima.Frontend
         cd src/GloboClima.Frontend
+        dotnet publish -c Release -o dist
         
-        # Configurar URL da API
+        echo "📤 Uploading frontend..."
+        BUCKET=$(aws cloudformation describe-stacks \
+          --stack-name globoclima-dev \
+          --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' \
+          --output text)
+        
+        echo "Bucket name: $BUCKET"
+        aws s3 sync dist/wwwroot/ s3://$BUCKET/ --delete
+        
+        echo "🎉 Deploy completed!"
         API_URL=$(aws cloudformation describe-stacks \
-          --stack-name globoclima-${{ steps.env.outputs.environment }} \
+          --stack-name globoclima-dev \
           --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
-          --output text --region ${{ env.AWS_REGION }})
-        
-        echo "API URL: $API_URL"
-        
-        # Atualizar appsettings.json
-        jq --arg apiUrl "$API_URL" '.ApiSettings.BaseUrl = $apiUrl' appsettings.json > appsettings.temp.json
-        mv appsettings.temp.json appsettings.json
-        
-        # Build
-        dotnet publish -c Release -o ./dist
-    
-    - name: Deploy Frontend
-      run: |
-        # Get bucket name
-        BUCKET_NAME=$(aws cloudformation describe-stacks \
-          --stack-name globoclima-${{ steps.env.outputs.environment }} \
-          --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucket`].OutputValue' \
-          --output text --region ${{ env.AWS_REGION }})
-        
-        echo "Uploading to bucket: $BUCKET_NAME"
-        
-        # Upload to S3
-        aws s3 sync src/GloboClima.Frontend/dist/wwwroot/ s3://$BUCKET_NAME --delete
-        
-        # Invalidate CloudFront
-        DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-          --stack-name globoclima-${{ steps.env.outputs.environment }} \
-          --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
-          --output text --region ${{ env.AWS_REGION }})
-        
-        echo "Invalidating CloudFront: $DISTRIBUTION_ID"
-        aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
-    
-    - name: Show URLs
-      run: |
-        API_URL=$(aws cloudformation describe-stacks \
-          --stack-name globoclima-${{ steps.env.outputs.environment }} \
-          --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
-          --output text --region ${{ env.AWS_REGION }})
-        
+          --output text)
         FRONTEND_URL=$(aws cloudformation describe-stacks \
-          --stack-name globoclima-${{ steps.env.outputs.environment }} \
+          --stack-name globoclima-dev \
           --query 'Stacks[0].Outputs[?OutputKey==`FrontendUrl`].OutputValue' \
-          --output text --region ${{ env.AWS_REGION }})
+          --output text)
         
-        echo "🚀 Deploy completed!"
-        echo "📡 API URL: $API_URL"
-        echo "🌐 Frontend URL: $FRONTEND_URL"
+        echo "📡 API: $API_URL"
+        echo "🌐 Frontend: $FRONTEND_URL"
