@@ -1,0 +1,82 @@
+﻿@using GloboClima.Core.Models
+<div class="card weather-card h-100">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="fas fa-map-marker-alt me-2"></i>
+            @Weather.CityName, @Weather.Country
+        </h5>
+
+    </div>
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-6">
+                <div class="temperature">
+                    @Weather.Temperature.ToString("F1")°C
+                </div>
+                <div class="feels-like text-muted">
+                    Sensação: @Weather.FeelsLike.ToString("F1")°C
+                </div>
+            </div>
+            <div class="col-6 text-center">
+                <img src="https://openweathermap.org/img/w/@(Weather.Icon).png"
+                     alt="@Weather.Description"
+                     class="weather-icon">
+                <div class="text-capitalize">@Weather.Description</div>
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="row text-center">
+            <div class="col-6">
+                <i class="fas fa-tint text-info"></i>
+                <br>
+                <small>Umidade</small>
+                <div><strong>@Weather.Humidity%</strong></div>
+            </div>
+            <div class="col-6">
+                <i class="fas fa-wind text-success"></i>
+                <br>
+                <small>Vento</small>
+                <div><strong>@Weather.WindSpeed.ToString("F1") m/s</strong></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@code {
+
+    [Parameter] public WeatherData Weather { get; set; } = new();
+    [Parameter] public bool IsFavorite { get; set; }
+    [Parameter] public EventCallback<string> OnToggleFavorite { get; set; }
+
+    private async Task ToggleFavorite()
+    {
+        await OnToggleFavorite.InvokeAsync(Weather.CityName);
+    }
+
+}
+
+<style>
+    .weather-card {
+        border: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s;
+    }
+
+    .weather-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .temperature {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #007bff;
+    }
+
+    .weather-icon {
+        width: 64px;
+        height: 64px;
+    }
+</style>

@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<AWSProjectType>Lambda</AWSProjectType>
+		<GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+		<RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AssemblyName>GloboClima.Lambda</AssemblyName>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Amazon.Lambda.Core" Version="2.3.0" />
+		<PackageReference Include="Amazon.Lambda.APIGatewayEvents" Version="2.7.1" />
+		<PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="1.7.0" />
+		<PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="2.4.3" />
+		<PackageReference Include="Microsoft.AspNetCore.Mvc" Version="2.2.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\GloboClima.API\GloboClima.API.csproj" />
+		<ProjectReference Include="..\GloboClima.Core\GloboClima.Core.csproj" />
+		<ProjectReference Include="..\GloboClima.Services\GloboClima.Services.csproj" />
+		<ProjectReference Include="..\GloboClima.Infrastructure\GloboClima.Infrastructure.csproj" />
+	</ItemGroup>
+
+</Project>

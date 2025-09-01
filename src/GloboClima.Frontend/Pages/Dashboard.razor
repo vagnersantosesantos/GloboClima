@@ -1,0 +1,777 @@
+﻿@page "/dashboard"
+@attribute [Authorize]
+@using GloboClima.Frontend.Components.Country
+@using GloboClima.Frontend.Components.Weather
+@using GloboClima.Frontend.Services
+@using GloboClima.Core.Models
+@inject WeatherService WeatherService
+@inject CountryService CountryService
+@inject AuthService AuthService
+
+<PageTitle>Dashboard - GloboClima</PageTitle>
+
+<div class="container-fluid">
+    <!-- Header do Dashboard -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center bg-primary text-white p-3 rounded">
+                <div>
+                    <h2 class="mb-0">
+                        <i class="fas fa-tachometer-alt me-2"></i>
+                        Meu Dashboard
+                    </h2>
+                    <p class="mb-0 opacity-75">Bem-vindo ao seu painel personalizado</p>
+                </div>
+                <div>
+                    <i class="fas fa-user-circle fa-3x"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Pesquisa -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cloud-sun me-2"></i>
+                        Consultar Clima
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" @bind="citySearch" 
+                               @onkeypress="OnCitySearchKeyPress"
+                               placeholder="Digite o nome da cidade...">
+                        <button class="btn btn-info" type="button" @onclick="SearchWeather" disabled="@isLoadingWeather">
+                            @if (isLoadingWeather)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    @if (isLoadingWeather)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border text-info" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Consultando clima...</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-flag me-2"></i>
+                        Consultar País
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" @bind="countrySearch" 
+                               @onkeypress="OnCountrySearchKeyPress"
+                               placeholder="Digite o nome do país...">
+                        <button class="btn btn-success" type="button" @onclick="SearchCountry" disabled="@isLoadingCountry">
+                            @if (isLoadingCountry)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    @if (isLoadingCountry)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border text-success" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Consultando país...</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+
+        <!-- Resultados das Pesquisas -->
+        @if (currentWeather != null)
+        {
+            <div class="row mb-8">
+                <div class="col-12">
+                    <h4>
+                        <i class="fas fa-thermometer-half me-2 text-info"></i>
+                        Clima Consultado
+                    </h4>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <WeatherCard Weather="currentWeather"
+                                 IsFavorite="favoriteCities.Contains(currentWeather.CityName)"
+                                 OnToggleFavorite="ToggleFavoriteCity" />
+                </div>
+            </div>
+        }
+        </div>
+        <div class="col-md-6 mb-4">
+            @if (currentCountry != null)
+            {
+                <div class="row mb-8">
+                    <div class="col-12">
+                        <h4>
+                            <i class="fas fa-globe me-2 text-success"></i>
+                            País Consultado
+                        </h4>
+                    </div>
+                    <div class="col-md-6 col-lg-4">
+                        <CountryCard Country="currentCountry"
+                                     IsFavorite="favoriteCountries.Contains(currentCountry.Name)"
+                                     OnToggleFavorite="ToggleFavoriteCountry" />
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Seção de Favoritos -->
+    <div class="row">
+        <div class="col-12">
+            <h4>
+                <i class="fas fa-heart me-2 text-danger"></i>
+                Meus Favoritos
+            </h4>
+        </div>
+        
+        <!-- Cidades Favoritas -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-cloud me-2"></i>
+                        Cidades Favoritas (@favoriteCities.Count)
+                    </h6>
+                    <!-- Botão para Adicionar Nova Cidade -->
+                    <button class="btn btn-sm btn-light" @onclick="ShowAddCityModal">
+                        <i class="fas fa-plus"></i>
+                        <span>Adicionar cidade favorita</span>
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (isLoadingFavorites)
+                    {
+                        <div class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-primary"></div>
+                            <p class="mt-2 text-muted small">Carregando favoritos...</p>
+                        </div>
+                    }
+                    else if (favoriteCities.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var city in favoriteCities)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0 border-0">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-map-marker-alt me-2 text-info"></i>
+                                        <strong>@city</strong>
+                                    </div>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <!-- Consultar Clima -->
+                                        <button class="btn btn-outline-info"
+                                                @onclick="() => QuickWeatherSearch(city)"
+                                                title="Consultar Clima">
+                                            <i class="fas fa-cloud-sun"></i>
+                                            <span>Consultar Clima</span>
+                                        </button>
+                                        <!-- Remover dos Favoritos -->
+                                        <button class="btn btn-outline-danger"
+                                                @onclick="() => RemoveFavoriteCity(city)"
+                                                title="Remover dos Favoritos">
+                                            <i class="fas fa-trash"></i>
+                                            <span>Remover</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-cloud fa-3x mb-3 opacity-25"></i>
+                            <p class="mb-2">Nenhuma cidade favorita</p>
+                            <button class="btn btn-sm btn-info" @onclick="ShowAddCityModal">
+                                <i class="fas fa-plus me-1"></i>
+                                Adicionar Cidade
+                                <span>
+                                    Adicionar aos Favoritos
+                                </span>
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Países Favoritos -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-flag me-2"></i>
+                        Países Favoritos (@favoriteCountries.Count)
+                    </h6>
+                    <!-- Botão para Adicionar Novo País -->
+                    <button class="btn btn-sm btn-light" @onclick="ShowAddCountryModal">
+                        <i class="fas fa-plus"></i>
+                        <span>Adionar pais favorito</span>
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (isLoadingFavorites)
+                    {
+                        <div class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-success"></div>
+                            <p class="mt-2 text-muted small">Carregando favoritos...</p>
+                        </div>
+                    }
+                    else if (favoriteCountries.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var country in favoriteCountries)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0 border-0">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-flag me-2 text-success"></i>
+                                        <strong>@country</strong>
+                                    </div>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <!-- Consultar País -->
+                                        <button class="btn btn-outline-success"
+                                                @onclick="() => QuickCountrySearch(country)"
+                                                title="Consultar Informações">
+                                            <i class="fas fa-info-circle"></i>
+                                            <span>Consultar</span>
+                                        </button>
+                                        <!-- Remover dos Favoritos -->
+                                        <button class="btn btn-outline-danger"
+                                                @onclick="() => RemoveFavoriteCountry(country)"
+                                                title="Remover dos Favoritos">
+                                            <i class="fas fa-trash"></i>
+                                            <span>Remover</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-globe fa-3x mb-3 opacity-25"></i>
+                            <p class="mb-2">Nenhum país favorito</p>
+                            <button class="btn btn-sm btn-success" @onclick="ShowAddCountryModal">
+                                <i class="fas fa-plus me-1"></i>
+                                Adicionar País
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal para Adicionar Cidade -->
+        @if (showAddCityModal)
+        {
+            <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-info text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-plus-circle me-2"></i>
+                                Adicionar Cidade Favorita
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" @onclick="CloseAddCityModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Nome da Cidade</label>
+                                <input type="text" class="form-control" @bind="newCityName"
+                                       @onkeypress="OnAddCityKeyPress"
+                                       placeholder="Ex: São Paulo, London, Tokyo...">
+                            </div>
+                            @if (addCityError != null)
+                            {
+                                <div class="alert alert-danger">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    @addCityError
+                                </div>
+                            }
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseAddCityModal">
+                                Cancelar
+                            </button>
+                            <button type="button" class="btn btn-info" @onclick="AddCityToFavorites" disabled="@isAddingCity">
+                                @if (isAddingCity)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="fas fa-heart me-1"></i>
+                                Adicionar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Modal para Adicionar País -->
+        @if (showAddCountryModal)
+        {
+            <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-success text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-plus-circle me-2"></i>
+                                Adicionar País Favorito
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" @onclick="CloseAddCountryModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Nome do País</label>
+                                <input type="text" class="form-control" @bind="newCountryName"
+                                       @onkeypress="OnAddCountryKeyPress"
+                                       placeholder="Ex: Brazil, United States, France...">
+                            </div>
+                            @if (addCountryError != null)
+                            {
+                                <div class="alert alert-danger">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    @addCountryError
+                                </div>
+                            }
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseAddCountryModal">
+                                Cancelar
+                            </button>
+                            <button type="button" class="btn btn-success" @onclick="AddCountryToFavorites" disabled="@isAddingCountry">
+                                @if (isAddingCountry)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="fas fa-heart me-1"></i>
+                                Adicionar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+    <!-- Mensagens de Erro/Sucesso -->
+    @if (errorMessage != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="ClearError"></button>
+        </div>
+    }
+
+    @if (successMessage != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>
+            @successMessage
+            <button type="button" class="btn-close" @onclick="ClearSuccess"></button>
+        </div>
+    }
+</div>
+</div>  
+
+@code {
+    private string citySearch = string.Empty;
+    private string countrySearch = string.Empty;
+    private WeatherData? currentWeather;
+    private CountryNameData? currentCountry;
+    private List<string> favoriteCities = new();
+    private List<string> favoriteCountries = new();
+    private bool isLoadingWeather = false;
+    private bool isLoadingCountry = false;
+    private bool isLoadingFavorites = false;
+    private string? errorMessage;
+    private string? successMessage;
+    private bool showAddCityModal = false;
+    private bool showAddCountryModal = false;
+    private string newCityName = string.Empty;
+    private string newCountryName = string.Empty;
+    private bool isAddingCity = false;
+    private bool isAddingCountry = false;
+    private string? addCityError;
+    private string? addCountryError;
+
+    [Parameter] public CountryCard CountryCard { get; set; } = new();
+    [Parameter] public WeatherCard WeatherCard { get; set; } = new();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFavorites();
+    }
+
+    private async Task LoadFavorites()
+    {
+        isLoadingFavorites = true;
+        try
+        {
+            favoriteCities = await WeatherService.GetFavoriteCitiesAsync();
+            favoriteCountries = await CountryService.GetFavoriteCountriesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar favoritos: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingFavorites = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SearchWeather()
+    {
+        if (string.IsNullOrWhiteSpace(citySearch)) 
+        {
+            errorMessage = "Digite o nome de uma cidade";
+            return;
+        }
+
+        isLoadingWeather = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            currentWeather = await WeatherService.GetWeatherAsync(citySearch.Trim());
+            if (currentWeather == null)
+            {
+                errorMessage = "Cidade não encontrada. Verifique o nome e tente novamente.";
+            }
+            else
+            {
+                successMessage = $"Clima de {currentWeather.CityName} consultado com sucesso!";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao buscar clima: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingWeather = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SearchCountry()
+    {
+        if (string.IsNullOrWhiteSpace(countrySearch))
+        {
+            errorMessage = "Digite o nome de um país";
+            return;
+        }
+
+        isLoadingCountry = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            currentCountry = await CountryService.GetCountryAsync(countrySearch.Trim());
+            if (currentCountry == null)
+            {
+                errorMessage = "País não encontrado. Verifique o nome e tente novamente.";
+            }
+            else
+            {
+                successMessage = $"Informações de {currentCountry.Name} consultadas com sucesso!";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao buscar país: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingCountry = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task QuickWeatherSearch(string city)
+    {
+        citySearch = city;
+        await SearchWeather();
+    }
+
+    private async Task QuickCountrySearch(string country)
+    {
+        countrySearch = country;
+        await SearchCountry();
+    }
+
+    private async Task ToggleFavoriteCity(string cityName)
+    {
+        try
+        {
+            if (favoriteCities.Contains(cityName))
+            {
+                await WeatherService.RemoveFavoriteCityAsync(cityName);
+                favoriteCities.Remove(cityName);
+                successMessage = $"{cityName} removida dos favoritos";
+            }
+            else
+            {
+                await WeatherService.AddFavoriteCityAsync(cityName);
+                favoriteCities.Add(cityName);
+                successMessage = $"{cityName} adicionada aos favoritos";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao gerenciar favoritos: {ex.Message}";
+        }
+    }
+
+    private async Task ToggleFavoriteCountry(string countryName)
+    {
+        try
+        {
+            if (favoriteCountries.Contains(countryName))
+            {
+                await CountryService.RemoveFavoriteCountryAsync(countryName);
+                favoriteCountries.Remove(countryName);
+                successMessage = $"{countryName} removido dos favoritos";
+            }
+            else
+            {
+                await CountryService.AddFavoriteCountryAsync(countryName);
+                favoriteCountries.Add(countryName);
+                successMessage = $"{countryName} adicionado aos favoritos";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao gerenciar favoritos: {ex.Message}";
+        }
+    }
+
+    private async Task RemoveFavoriteCity(string city)
+    {
+        try
+        {
+            await WeatherService.RemoveFavoriteCityAsync(city);
+            favoriteCities.Remove(city);
+            successMessage = $"{city} removida dos favoritos";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao remover cidade: {ex.Message}";
+        }
+    }
+
+    private async Task RemoveFavoriteCountry(string country)
+    {
+        try
+        {
+            await CountryService.RemoveFavoriteCountryAsync(country);
+            favoriteCountries.Remove(country);
+            successMessage = $"{country} removido dos favoritos";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao remover país: {ex.Message}";
+        }
+    }
+
+    private async Task OnCitySearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchWeather();
+        }
+    }
+
+    private async Task OnCountrySearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchCountry();
+        }
+    }
+
+        private void ShowAddCityModal()
+        {
+            newCityName = string.Empty;
+            addCityError = null;
+            showAddCityModal = true;
+        }
+
+        private void CloseAddCityModal()
+        {
+            showAddCityModal = false;
+            newCityName = string.Empty;
+            addCityError = null;
+        }
+
+        private void ShowAddCountryModal()
+        {
+            newCountryName = string.Empty;
+            addCountryError = null;
+            showAddCountryModal = true;
+        }
+
+        private void CloseAddCountryModal()
+        {
+            showAddCountryModal = false;
+            newCountryName = string.Empty;
+            addCountryError = null;
+        }
+
+        private async Task AddCityToFavorites()
+        {
+            if (string.IsNullOrWhiteSpace(newCityName))
+            {
+                addCityError = "Digite o nome da cidade";
+                return;
+            }
+
+            if (favoriteCities.Contains(newCityName.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                addCityError = "Esta cidade já está nos favoritos";
+                return;
+            }
+
+            isAddingCity = true;
+            addCityError = null;
+
+            try
+            {
+                // Primeiro verifica se a cidade existe consultando o clima
+                var weather = await WeatherService.GetWeatherAsync(newCityName.Trim());
+                if (weather == null)
+                {
+                    addCityError = "Cidade não encontrada. Verifique o nome e tente novamente.";
+                    return;
+                }
+
+                // Se existe, adiciona aos favoritos
+                var success = await WeatherService.AddFavoriteCityAsync(weather.CityName);
+                if (success)
+                {
+                    favoriteCities.Add(weather.CityName);
+                    successMessage = $"{weather.CityName} adicionada aos favoritos!";
+                    CloseAddCityModal();
+                }
+                else
+                {
+                    addCityError = "Erro ao adicionar cidade aos favoritos";
+                }
+            }
+            catch (Exception ex)
+            {
+                addCityError = $"Erro: {ex.Message}";
+            }
+            finally
+            {
+                isAddingCity = false;
+            }
+        }
+
+        private async Task AddCountryToFavorites()
+        {
+            if (string.IsNullOrWhiteSpace(newCountryName))
+            {
+                addCountryError = "Digite o nome do país";
+                return;
+            }
+
+            if (favoriteCountries.Contains(newCountryName.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                addCountryError = "Este país já está nos favoritos";
+                return;
+            }
+
+            isAddingCountry = true;
+            addCountryError = null;
+
+            try
+            {
+                // Primeiro verifica se o país existe
+                var country = await CountryService.GetCountryAsync(newCountryName.Trim());
+                if (country == null)
+                {
+                    addCountryError = "País não encontrado. Verifique o nome e tente novamente.";
+                    return;
+                }
+
+                // Se existe, adiciona aos favoritos
+                var success = await CountryService.AddFavoriteCountryAsync(country.Name);
+                if (success)
+                {
+                    favoriteCountries.Add(country.Name);
+                    successMessage = $"{country.Name} adicionado aos favoritos!";
+                    CloseAddCountryModal();
+                }
+                else
+                {
+                    addCountryError = "Erro ao adicionar país aos favoritos";
+                }
+            }
+            catch (Exception ex)
+            {
+                addCountryError = $"Erro: {ex.Message}";
+            }
+            finally
+            {
+                isAddingCountry = false;
+            }
+        }
+
+        private async Task OnAddCityKeyPress(KeyboardEventArgs e)
+        {
+            if (e.Key == "Enter")
+            {
+                await AddCityToFavorites();
+            }
+        }
+
+        private async Task OnAddCountryKeyPress(KeyboardEventArgs e)
+        {
+            if (e.Key == "Enter")
+            {
+                await AddCountryToFavorites();
+            }
+        }
+
+    private void ClearError()
+    {
+        errorMessage = null;
+    }
+
+    private void ClearSuccess()
+    {
+        successMessage = null;
+    }
+}

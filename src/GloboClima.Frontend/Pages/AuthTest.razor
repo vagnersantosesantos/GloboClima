@@ -1,0 +1,30 @@
+﻿@page "/authtest"
+
+<h3>Teste de Autenticação</h3>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="alert alert-success">
+            ✅ USUÁRIO LOGADO!
+            <br>ID: @context.User.FindFirst("sub")?.Value
+            <br>Nome: @context.User.Identity?.Name
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="alert alert-danger">
+            ❌ USUÁRIO NÃO LOGADO
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+<button class="btn btn-primary" @onclick="CheckAuth">Check Auth Status</button>
+
+@code {
+    [Inject] private AuthService AuthService { get; set; } = default!;
+
+    private void CheckAuth()
+    {
+        Console.WriteLine($"IsAuthenticated: {AuthService.IsAuthenticated}");
+        Console.WriteLine($"UserId: {AuthService.UserId}");
+    }
+}
