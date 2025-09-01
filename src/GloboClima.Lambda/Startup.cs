@@ -35,8 +35,7 @@ public class Startup
         {
             var config = new AmazonDynamoDBConfig
             {
-                RegionEndpoint = RegionEndpoint.GetBySystemName(
-                    Environment.GetEnvironmentVariable("AWS_REGION") ?? "us-east-1")
+                RegionEndpoint = RegionEndpoint.GetBySystemName("us-east-1")
             };
             return new AmazonDynamoDBClient(config);
         });
