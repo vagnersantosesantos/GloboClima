@@ -2,7 +2,7 @@ name: Deploy GloboClima (Fixed)
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 env:
