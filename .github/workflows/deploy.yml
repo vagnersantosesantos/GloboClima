@@ -108,7 +108,7 @@ jobs:
                   JWT__ISSUER: 'GloboClima'
                   JWT__AUDIENCE: 'GloboClima-Users'
                   OPENWEATHERMAP__APIKEY: !Ref OpenWeatherMapApiKey
-                  AWS_REGION: !Ref AWS::Region
+                  # AWS_REGION: !Ref AWS::Region
               Policies:
                 - DynamoDBCrudPolicy:
                     TableName: !Ref UsersTable
@@ -170,7 +170,7 @@ jobs:
             OpenWeatherMapApiKey="${{ secrets.OPENWEATHERMAP_API_KEY }}" \
           --capabilities CAPABILITY_IAM \
           --resolve-s3 \
-          --region ${{ env.AWS_REGION }} \
+          # --region ${{ env.AWS_REGION }} \
           --no-confirm-changeset \
           --no-fail-on-empty-changeset
     
