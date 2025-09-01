@@ -34,7 +34,7 @@ Resources:
     Properties:
       FunctionName: !Sub 'globoclima-${Environment}'
       Runtime: provided.al2023  # Runtime customizado para .NET 9
-      CodeUri: ../GloboClima.Lambda/bin/Release/net9.0/linux-x64/publish/
+      CodeUri: ../../src/GloboClima.Lambda/bin/Release/net9.0/linux-x64/publish/
       Handler: bootstrap
       MemorySize: 256  # Aumentado um pouco
       Timeout: 30
