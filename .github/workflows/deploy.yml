@@ -165,12 +165,9 @@ jobs:
         sam deploy \
           --template-file sam-template.yml \
           --stack-name globoclima-dev \
-          --parameter-overrides \
-            JWTSecret="${{ secrets.JWT_SECRET }}" \
-            OpenWeatherMapApiKey="${{ secrets.OPENWEATHERMAP_API_KEY }}" \
+          --parameter-overrides JWTSecret="${{ secrets.JWT_SECRET }}" OpenWeatherMapApiKey="${{ secrets.OPENWEATHERMAP_API_KEY }}" \
           --capabilities CAPABILITY_IAM \
           --resolve-s3 \
-          # --region ${{ env.AWS_REGION }} \
           --no-confirm-changeset \
           --no-fail-on-empty-changeset
     
