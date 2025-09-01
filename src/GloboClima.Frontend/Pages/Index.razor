@@ -1,0 +1,347 @@
+﻿@page "/"
+@using GloboClima.Frontend.Services
+@using GloboClima.Core.Models
+@inject WeatherService WeatherService
+@inject CountryService CountryService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>GloboClima - Clima e Países</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="container-fluid">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="hero-section text-center py-5 bg-gradient-primary text-white rounded">
+                        <h1 class="display-4 fw-bold">
+                            <i class="fas fa-globe-americas me-3"></i>
+                            GloboClima
+                        </h1>
+                        <p class="lead">Descubra o clima e informações de países ao redor do mundo</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-cloud-sun me-2"></i>Consultar Clima</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" @bind="citySearch" 
+                                       @onkeypress="OnCitySearchKeyPress"
+                                       placeholder="Digite o nome da cidade...">
+                                <button class="btn btn-primary" type="button" @onclick="SearchWeather">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            @if (isLoadingWeather)
+                            {
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Carregando...</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-flag me-2"></i>Consultar País</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" @bind="countrySearch" 
+                                       @onkeypress="OnCountrySearchKeyPress"
+                                       placeholder="Digite o nome do país...">
+                                <button class="btn btn-success" type="button" @onclick="SearchCountry">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            @if (isLoadingCountry)
+                            {
+                                <div class="text-center">
+                                    <div class="spinner-border text-success" role="status">
+                                        <span class="visually-hidden">Carregando...</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (currentWeather != null)
+            {
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h3><i class="fas fa-thermometer-half me-2"></i>Clima Atual</h3>
+                    </div>
+                    <div class="col-md-6 col-lg-4">
+                        <WeatherCard Weather="currentWeather" 
+                                   IsFavorite="favoriteCities.Contains(currentWeather.CityName)"
+                                   OnToggleFavorite="ToggleFavoriteCity" />
+                    </div>
+                </div>
+            }
+
+            @if (currentCountry != null)
+            {
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h3><i class="fas fa-globe me-2"></i>Informações do País</h3>
+                    </div>
+                    <div class="col-md-6 col-lg-4">
+                        <CountryCard Country="currentCountry" 
+                                   IsFavorite="favoriteCountries.Contains(currentCountry.Name)"
+                                   OnToggleFavorite="ToggleFavoriteCountry" />
+                    </div>
+                </div>
+            }
+
+            @if (errorMessage != null)
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    @errorMessage
+                    <button type="button" class="btn-close" @onclick="ClearError"></button>
+                </div>
+            }
+        </div>
+    </Authorized>
+    <Authorized>
+        <div class="text-center">
+            <a href="/dashboard" class="btn btn-primary btn-lg">
+                <i class="fas fa-tachometer-alt me-2"></i>
+                Ir para meu Dashboard
+            </a>
+        </div>
+    </Authorized>
+    
+    <NotAuthorized>
+        <div class="container">
+            <div class="row justify-content-center mt-5">
+                <div class="col-md-10 col-lg-8">
+                    <div class="text-center mb-5">
+                        <div class="hero-section py-5">
+                            <i class="fas fa-globe-americas fa-4x text-primary mb-4"></i>
+                            <h1 class="display-3 fw-bold text-primary">GloboClima</h1>
+                            <p class="lead text-muted fs-4">
+                                Consulte informações climáticas e dados de países ao redor do mundo
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-5">
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center p-4">
+                                    <i class="fas fa-cloud-sun fa-3x text-primary mb-3"></i>
+                                    <h5 class="card-title">Clima Mundial</h5>
+                                    <p class="card-text text-muted">
+                                        Consulte o clima atual de qualquer cidade do mundo em tempo real
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center p-4">
+                                    <i class="fas fa-flag fa-3x text-success mb-3"></i>
+                                    <h5 class="card-title">Dados de Países</h5>
+                                    <p class="card-text text-muted">
+                                        Informações completas sobre população, idiomas, moedas e muito mais
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center p-4">
+                                    <i class="fas fa-heart fa-3x text-danger mb-3"></i>
+                                    <h5 class="card-title">Favoritos</h5>
+                                    <p class="card-text text-muted">
+                                        Salve suas cidades e países favoritos para acesso rápido
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card border-0 shadow">
+                        <div class="card-body p-5 text-center">
+                            <h3 class="mb-4">Comece a explorar o mundo!</h3>
+                            <p class="text-muted mb-4">
+                                Faça login ou crie uma conta gratuita para acessar todas as funcionalidades
+                            </p>
+                            <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center">
+                                <a href="/login" class="btn btn-primary btn-lg px-4">
+                                    <i class="fas fa-sign-in-alt me-2"></i>
+                                    Fazer Login
+                                </a>
+                                <a href="/register" class="btn btn-outline-primary btn-lg px-4">
+                                    <i class="fas fa-user-plus me-2"></i>
+                                    Criar Conta Grátis
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string citySearch = string.Empty;
+    private string countrySearch = string.Empty;
+    private WeatherData? currentWeather;
+    private CountryNameData? currentCountry;
+    private List<string> favoriteCities = new();
+    private List<string> favoriteCountries = new();
+    private bool isLoadingWeather = false;
+    private bool isLoadingCountry = false;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFavorites();
+    }
+
+    private async Task LoadFavorites()
+    {
+        try
+        {
+            favoriteCities = await WeatherService.GetFavoriteCitiesAsync();
+            favoriteCountries = await CountryService.GetFavoriteCountriesAsync();
+        }
+        catch (Exception)
+        {
+            // Usuário não logado ou erro na API
+            favoriteCities = new List<string>();
+            favoriteCountries = new List<string>();
+        }
+    }
+
+    private async Task SearchWeather()
+    {
+        if (string.IsNullOrWhiteSpace(citySearch)) return;
+
+        isLoadingWeather = true;
+        errorMessage = null;
+
+        try
+        {
+            currentWeather = await WeatherService.GetWeatherAsync(citySearch);
+            if (currentWeather == null)
+            {
+                errorMessage = "Cidade não encontrada. Verifique o nome e tente novamente.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao buscar clima: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingWeather = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SearchCountry()
+    {
+        if (string.IsNullOrWhiteSpace(countrySearch)) return;
+
+        isLoadingCountry = true;
+        errorMessage = null;
+
+        try
+        {
+            currentCountry = await CountryService.GetCountryAsync(countrySearch);
+            if (currentCountry == null)
+            {
+                errorMessage = "País não encontrado. Verifique o nome e tente novamente.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao buscar país: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingCountry = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnCitySearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchWeather();
+        }
+    }
+
+    private async Task OnCountrySearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchCountry();
+        }
+    }
+
+    private async Task ToggleFavoriteCity(string cityName)
+    {
+        try
+        {
+            if (favoriteCities.Contains(cityName))
+            {
+                await WeatherService.RemoveFavoriteCityAsync(cityName);
+                favoriteCities.Remove(cityName);
+            }
+            else
+            {
+                await WeatherService.AddFavoriteCityAsync(cityName);
+                favoriteCities.Add(cityName);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao gerenciar favoritos: {ex.Message}";
+        }
+    }
+
+    private async Task ToggleFavoriteCountry(string countryName)
+    {
+        try
+        {
+            if (favoriteCountries.Contains(countryName))
+            {
+                await CountryService.RemoveFavoriteCountryAsync(countryName);
+                favoriteCountries.Remove(countryName);
+            }
+            else
+            {
+                await CountryService.AddFavoriteCountryAsync(countryName);
+                favoriteCountries.Add(countryName);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao gerenciar favoritos: {ex.Message}";
+        }
+    }
+
+    private void ClearError()
+    {
+        errorMessage = null;
+    }
+}

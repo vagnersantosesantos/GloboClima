@@ -1,0 +1,45 @@
+﻿@using GloboClima.Frontend.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4 auth">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="text-info">
+                        <i class="fas fa-user me-1"></i>
+                        Olá, @context.User.Identity.Name!
+                    </span>
+                    <button class="btn btn-outline-light btn-sm ms-2" @onclick="Logout">
+                        <i class="fas fa-sign-out-alt"></i> Sair
+                    </button>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="/login" class="btn btn-outline-light btn-sm">
+                        <i class="fas fa-sign-in-alt"></i> Entrar
+                    </a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    [Inject] private AuthService AuthService { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
+}
