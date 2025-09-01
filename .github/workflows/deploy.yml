@@ -1,4 +1,4 @@
-name: Deploy GloboClima (Force Clean)
+name: Deploy GloboClima Auto
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: 
       - main
-  workflow_dispatch:
+  workflow_dispatch: 
 
 env:
   AWS_REGION: us-east-1
@@ -17,68 +17,34 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
-    - name: Checkout
+    - name: 📥 Checkout Code
       uses: actions/checkout@v4
     
-    - name: Setup .NET
+    - name: ⚙️ Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.0.x'
     
-    - name: Configure AWS
+    - name: 🔐 Configure AWS
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
     
-    - name: 🚨 Force Clean ROLLBACK_COMPLETE Stack
+    - name: 🔍 Debug Structure
       run: |
-        echo "🧹 Checking stack status..."
-        
-        STACK_STATUS=$(aws cloudformation describe-stacks \
-          --stack-name globoclima-dev \
-          --query 'Stacks[0].StackStatus' \
-          --output text \
-          --region ${{ env.AWS_REGION }} 2>/dev/null || echo "STACK_NOT_FOUND")
-        
-        echo "Current stack status: $STACK_STATUS"
-        
-        if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
-          echo "🚨 Stack in ROLLBACK_COMPLETE state - forcing delete..."
-          
-          aws cloudformation delete-stack \
-            --stack-name globoclima-dev \
-            --region ${{ env.AWS_REGION }}
-          
-          echo "⏳ Waiting for stack deletion..."
-          aws cloudformation wait stack-delete-complete \
-            --stack-name globoclima-dev \
-            --region ${{ env.AWS_REGION }}
-          
-          echo "✅ Stack deleted successfully"
-          
-        elif [[ "$STACK_STATUS" != "STACK_NOT_FOUND" ]]; then
-          echo "⚠️ Stack exists in state: $STACK_STATUS - deleting anyway..."
-          
-          aws cloudformation delete-stack \
-            --stack-name globoclima-dev \
-            --region ${{ env.AWS_REGION }}
-          
-          aws cloudformation wait stack-delete-complete \
-            --stack-name globoclima-dev \
-            --region ${{ env.AWS_REGION }}
-          
-          echo "✅ Stack deleted"
-        else
-          echo "✅ No existing stack found"
-        fi
+        echo "🚀 Starting auto deploy for commit: ${{ github.sha }}"
+        echo "📁 Project structure:"
+        find . -name "*.csproj" -type f | head -10
+        ls -la src/ 2>/dev/null || echo "src folder not found"
     
     - name: 🔨 Build Lambda
       run: |
-        echo "Building Lambda..."
+        echo "Building Lambda for auto deploy..."
         cd src/GloboClima.Lambda
         dotnet publish -c Release -r linux-x64 --self-contained true -o publish
         
@@ -90,110 +56,152 @@ jobs:
         EOF
         chmod +x bootstrap
         
-        echo "✅ Lambda built - Files:"
+        echo "✅ Lambda build completed"
         ls -la
     
-    - name: ☁️ Deploy Fresh Stack
+    - name: 📦 Install SAM CLI
       run: |
-        echo "🚀 Creating fresh stack..."
-        
-        aws cloudformation create-stack \
-          --stack-name globoclima-dev \
-          --template-body file://infrastructure/deploy.yml \
-          --parameters \
-            ParameterKey=JWTSecret,ParameterValue="${{ secrets.JWT_SECRET }}" \
-            ParameterKey=OpenWeatherMapApiKey,ParameterValue="${{ secrets.OPENWEATHERMAP_API_KEY }}" \
-          --capabilities CAPABILITY_NAMED_IAM \
-          --region ${{ env.AWS_REGION }}
-        
-        echo "⏳ Waiting for stack creation (this may take 5-10 minutes)..."
-        aws cloudformation wait stack-create-complete \
-          --stack-name globoclima-dev \
-          --region ${{ env.AWS_REGION }}
-        
-        echo "✅ Stack created successfully!"
+        pip install aws-sam-cli
+        sam --version
     
-    - name: 📊 Verify Stack
+    - name: 📝 Create SAM Template
       run: |
-        echo "📋 Stack Details:"
-        aws cloudformation describe-stacks \
+        cat > sam-template.yml << 'EOF'
+        AWSTemplateFormatVersion: '2010-09-09'
+        Transform: AWS::Serverless-2016-10-31
+        Description: 'GloboClima - Auto Deploy'
+
+        Parameters:
+          JWTSecret:
+            Type: String
+            NoEcho: true
+          OpenWeatherMapApiKey:
+            Type: String
+            NoEcho: true
+
+        Resources:
+          UsersTable:
+            Type: AWS::DynamoDB::Table
+            Properties:
+              TableName: 'GloboClima-Users-dev'
+              BillingMode: PAY_PER_REQUEST
+              AttributeDefinitions:
+                - AttributeName: Id
+                  AttributeType: S
+              KeySchema:
+                - AttributeName: Id
+                  KeyType: HASH
+
+          ApiFunction:
+            Type: AWS::Serverless::Function
+            Properties:
+              FunctionName: 'globoclima-dev'
+              Runtime: provided.al2023
+              CodeUri: ./src/GloboClima.Lambda/publish/
+              Handler: bootstrap
+              MemorySize: 256
+              Timeout: 30
+              Environment:
+                Variables:
+                  DYNAMODB_TABLE_NAME: !Ref UsersTable
+                  JWT__SECRET: !Ref JWTSecret
+                  JWT__ISSUER: 'GloboClima'
+                  JWT__AUDIENCE: 'GloboClima-Users'
+                  OPENWEATHERMAP__APIKEY: !Ref OpenWeatherMapApiKey
+                  AWS_REGION: !Ref AWS::Region
+              Policies:
+                - DynamoDBCrudPolicy:
+                    TableName: !Ref UsersTable
+              Events:
+                ApiEvent:
+                  Type: Api
+                  Properties:
+                    Path: /{proxy+}
+                    Method: ANY
+                RootEvent:
+                  Type: Api
+                  Properties:
+                    Path: /
+                    Method: ANY
+
+          FrontendBucket:
+            Type: AWS::S3::Bucket
+            Properties:
+              BucketName: !Sub 'globoclima-dev-${AWS::AccountId}'
+              WebsiteConfiguration:
+                IndexDocument: index.html
+              PublicAccessBlockConfiguration:
+                BlockPublicAcls: false
+                BlockPublicPolicy: false
+                IgnorePublicAcls: false
+                RestrictPublicBuckets: false
+
+          BucketPolicy:
+            Type: AWS::S3::BucketPolicy
+            Properties:
+              Bucket: !Ref FrontendBucket
+              PolicyDocument:
+                Statement:
+                  - Effect: Allow
+                    Principal: '*'
+                    Action: s3:GetObject
+                    Resource: !Sub '${FrontendBucket}/*'
+
+        Outputs:
+          ApiUrl:
+            Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+          FrontendUrl:
+            Value: !Sub 'http://${FrontendBucket}.s3-website-${AWS::Region}.amazonaws.com'
+          BucketName:
+            Value: !Ref FrontendBucket
+        EOF
+        
+        echo "✅ SAM template created"
+    
+    - name: ☁️ Deploy Infrastructure
+      run: |
+        echo "🚀 Auto deploying infrastructure..."
+        
+        sam deploy \
+          --template-file sam-template.yml \
           --stack-name globoclima-dev \
+          --parameter-overrides \
+            JWTSecret="${{ secrets.JWT_SECRET }}" \
+            OpenWeatherMapApiKey="${{ secrets.OPENWEATHERMAP_API_KEY }}" \
+          --capabilities CAPABILITY_IAM \
+          --resolve-s3 \
           --region ${{ env.AWS_REGION }} \
-          --query 'Stacks[0].[StackName,StackStatus]' \
-          --output table
-        
-        echo "📋 Stack Outputs:"
-        aws cloudformation describe-stacks \
-          --stack-name globoclima-dev \
-          --region ${{ env.AWS_REGION }} \
-          --query 'Stacks[0].Outputs' \
-          --output table
+          --no-confirm-changeset \
+          --no-fail-on-empty-changeset
     
-    - name: 📦 Upload Lambda Code
+    - name: 🎨 Build & Deploy Frontend
       run: |
-        echo "Uploading Lambda code..."
-        cd src/GloboClima.Lambda/publish
-        
-        # Create ZIP
-        zip -r lambda-package.zip .
-        
-        # Upload to Lambda function
-        aws lambda update-function-code \
-          --function-name globoclima-dev \
-          --zip-file fileb://lambda-package.zip \
-          --region ${{ env.AWS_REGION }}
-        
-        echo "✅ Lambda code uploaded"
-    
-    - name: 🎨 Deploy Frontend
-      run: |
-        echo "Deploying frontend..."
+        echo "Building frontend..."
         cd src/GloboClima.Frontend
         dotnet publish -c Release -o dist
         
-        # Get bucket name from stack outputs
+        echo "Uploading to S3..."
         BUCKET=$(aws cloudformation describe-stacks \
           --stack-name globoclima-dev \
-          --region ${{ env.AWS_REGION }} \
           --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' \
           --output text)
         
-        echo "Uploading to bucket: $BUCKET"
         aws s3 sync dist/wwwroot/ s3://$BUCKET/ --delete
         
-        echo "🎉 DEPLOY COMPLETED SUCCESSFULLY!"
-        
-        # Show final URLs
+        echo "🎉 AUTO DEPLOY COMPLETED!"
+        API_URL=$(aws cloudformation describe-stacks \
+          --stack-name globoclima-dev \
+          --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
+          --output text)
         FRONTEND_URL=$(aws cloudformation describe-stacks \
           --stack-name globoclima-dev \
-          --region ${{ env.AWS_REGION }} \
           --query 'Stacks[0].Outputs[?OutputKey==`FrontendUrl`].OutputValue' \
           --output text)
         
-        LAMBDA_ARN=$(aws cloudformation describe-stacks \
-          --stack-name globoclima-dev \
-          --region ${{ env.AWS_REGION }} \
-          --query 'Stacks[0].Outputs[?OutputKey==`LambdaArn`].OutputValue' \
-          --output text)
+        echo "📡 API: $API_URL"
+        echo "🌐 Frontend: $FRONTEND_URL"
         
-        echo "🌐 Frontend URL: $FRONTEND_URL"
-        echo "⚡ Lambda ARN: $LAMBDA_ARN"
-    
-    - name: 🚨 Debug on Failure
-      if: failure()
-      run: |
-        echo "Debugging failed deployment..."
-        
-        # Show stack events for failed resources
-        aws cloudformation describe-stack-events \
-          --stack-name globoclima-dev \
-          --region ${{ env.AWS_REGION }} \
-          --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
-          --output table || echo "No stack events found"
-        
-        # Show current stack status
-        aws cloudformation describe-stacks \
-          --stack-name globoclima-dev \
-          --region ${{ env.AWS_REGION }} \
-          --query 'Stacks[0].StackStatus' \
-          --output text || echo "No stack found"
+        # Comentário no PR (se for PR)
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          echo "This would be a PR comment with URLs"
+        fi
