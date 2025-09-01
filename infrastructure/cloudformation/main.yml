@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: 'GloboClima - Deploy Free Tier'
+Description: 'GloboClima - Deploy Free Tier (Fixed)'
 
 Parameters:
   Environment:
@@ -16,6 +16,7 @@ Parameters:
     NoEcho: true
 
 Resources:
+  # DynamoDB Table
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -28,6 +29,38 @@ Resources:
         - AttributeName: Id
           KeyType: HASH
 
+  # S3 Bucket para Frontend (CORRIGIDO)
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'globoclima-${Environment}-${AWS::AccountId}'
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      # Remover PublicAccessBlockConfiguration para permitir acesso público
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  # Bucket Policy (CORRIGIDO)
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: FrontendBucket
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: 
+              - s3:GetObject
+            Resource: !Sub '${FrontendBucket}/*'
+
+  # Lambda Function (CORRIGIDO)
   ApiFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -44,50 +77,45 @@ Resources:
           JWT__ISSUER: 'GloboClima'
           JWT__AUDIENCE: 'GloboClima-Users'
           OPENWEATHERMAP__APIKEY: !Ref OpenWeatherMapApiKey
+          AWS_REGION: !Ref AWS::Region
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
       Events:
-        ApiEvent:
+        # Todos os paths da API
+        ProxyResource:
           Type: Api
           Properties:
             Path: /{proxy+}
             Method: ANY
-        RootEvent:
+        # Root path
+        RootResource:
           Type: Api
           Properties:
             Path: /
             Method: ANY
 
-  FrontendBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'globoclima-${Environment}-${AWS::AccountId}'
-      WebsiteConfiguration:
-        IndexDocument: index.html
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
-
-  BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref FrontendBucket
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action: s3:GetObject
-            Resource: !Sub '${FrontendBucket}/*'
-
 Outputs:
   ApiUrl:
+    Description: 'API Gateway URL'
     Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+    Export:
+      Name: !Sub 'GloboClima-API-URL-${Environment}'
     
   FrontendUrl:
+    Description: 'Frontend S3 Website URL'
     Value: !Sub 'http://${FrontendBucket}.s3-website-${AWS::Region}.amazonaws.com'
+    Export:
+      Name: !Sub 'GloboClima-Frontend-URL-${Environment}'
     
   BucketName:
+    Description: 'S3 Bucket Name'
     Value: !Ref FrontendBucket
+    Export:
+      Name: !Sub 'GloboClima-Bucket-${Environment}'
+
+  DynamoTableName:
+    Description: 'DynamoDB Table Name'
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub 'GloboClima-Table-${Environment}'
