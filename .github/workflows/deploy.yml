@@ -1,9 +1,14 @@
-name: Deploy GloboClima (Free Tier)
+name: Deploy GloboClima Auto
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: 
+      - main
+      - develop
+  pull_request:
+    branches: 
+      - main
+  workflow_dispatch:  # Permite execução manual também
 
 env:
   AWS_REGION: us-east-1
@@ -12,38 +17,38 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Só fazer deploy se for push para main (não PR)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
-    - name: Checkout
+    - name: 📥 Checkout Code
       uses: actions/checkout@v4
     
-    - name: Setup .NET
+    - name: ⚙️ Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.0.x'
     
-    - name: Configure AWS
+    - name: 🔐 Configure AWS
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
     
-    - name: Debug - Check structure
+    - name: 🔍 Debug Structure
       run: |
+        echo "🚀 Starting auto deploy for commit: ${{ github.sha }}"
         echo "📁 Project structure:"
-        find . -name "*.csproj" -type f
-        ls -la src/
+        find . -name "*.csproj" -type f | head -10
+        ls -la src/ 2>/dev/null || echo "src folder not found"
     
-    - name: Build Lambda
+    - name: 🔨 Build Lambda
       run: |
-        echo "🔨 Building Lambda..."
-        
-        # ✅ PATH CORRETO: src/GloboClima.Lambda
+        echo "Building Lambda for auto deploy..."
         cd src/GloboClima.Lambda
         dotnet publish -c Release -r linux-x64 --self-contained true -o publish
         
-        # Criar bootstrap
         cd publish
         cat > bootstrap << 'EOF'
         #!/bin/bash
@@ -52,25 +57,20 @@ jobs:
         EOF
         chmod +x bootstrap
         
-        echo "✅ Build completed. Files:"
+        echo "✅ Lambda build completed"
         ls -la
-        
-        echo "📍 Full path:"
-        pwd
     
-    - name: Install SAM CLI
+    - name: 📦 Install SAM CLI
       run: |
         pip install aws-sam-cli
         sam --version
     
-    - name: Create SAM Template
+    - name: 📝 Create SAM Template
       run: |
-        echo "📝 Creating SAM template..."
-        
         cat > sam-template.yml << 'EOF'
         AWSTemplateFormatVersion: '2010-09-09'
         Transform: AWS::Serverless-2016-10-31
-        Description: 'GloboClima - Deploy Free Tier'
+        Description: 'GloboClima - Auto Deploy'
 
         Parameters:
           JWTSecret:
@@ -158,17 +158,9 @@ jobs:
         
         echo "✅ SAM template created"
     
-    - name: Deploy Infrastructure
+    - name: ☁️ Deploy Infrastructure
       run: |
-        echo "🚀 Starting SAM deploy..."
-        
-        # ✅ Verificar se pasta existe com path correto
-        if [ ! -d "src/GloboClima.Lambda/publish" ]; then
-          echo "❌ Publish folder not found at src/GloboClima.Lambda/publish!"
-          echo "📁 Checking what exists:"
-          find . -name "publish" -type d
-          exit 1
-        fi
+        echo "🚀 Auto deploying infrastructure..."
         
         sam deploy \
           --template-file sam-template.yml \
@@ -182,24 +174,21 @@ jobs:
           --no-confirm-changeset \
           --no-fail-on-empty-changeset
     
-    - name: Build & Deploy Frontend
+    - name: 🎨 Build & Deploy Frontend
       run: |
-        echo "🎨 Building frontend..."
-        
-        # ✅ PATH CORRETO: src/GloboClima.Frontend
+        echo "Building frontend..."
         cd src/GloboClima.Frontend
         dotnet publish -c Release -o dist
         
-        echo "📤 Uploading frontend..."
+        echo "Uploading to S3..."
         BUCKET=$(aws cloudformation describe-stacks \
           --stack-name globoclima-dev \
           --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' \
           --output text)
         
-        echo "Bucket name: $BUCKET"
         aws s3 sync dist/wwwroot/ s3://$BUCKET/ --delete
         
-        echo "🎉 Deploy completed!"
+        echo "🎉 AUTO DEPLOY COMPLETED!"
         API_URL=$(aws cloudformation describe-stacks \
           --stack-name globoclima-dev \
           --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
@@ -211,3 +200,8 @@ jobs:
         
         echo "📡 API: $API_URL"
         echo "🌐 Frontend: $FRONTEND_URL"
+        
+        # Comentário no PR (se for PR)
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          echo "This would be a PR comment with URLs"
+        fi
