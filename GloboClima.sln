@@ -15,7 +15,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GloboClima.Infrastructure",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GloboClima.Lambda", "src\GloboClima.Lambda\GloboClima.Lambda.csproj", "{1EBF1E53-2C4A-4C12-9405-C06554FC859D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GloboClima.Tests", "tests\GloboClima.Tests\GloboClima.Tests.csproj", "{44495DCD-41BF-4EEB-A19B-BA55BEA6509D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GloboClima.Tests", "tests\GloboClima.Tests\GloboClima.Tests.csproj", "{2A03F04F-9FAE-40AF-A93E-323E1E251B36}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -47,10 +47,10 @@ Global
 		{1EBF1E53-2C4A-4C12-9405-C06554FC859D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1EBF1E53-2C4A-4C12-9405-C06554FC859D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1EBF1E53-2C4A-4C12-9405-C06554FC859D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{44495DCD-41BF-4EEB-A19B-BA55BEA6509D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{44495DCD-41BF-4EEB-A19B-BA55BEA6509D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{44495DCD-41BF-4EEB-A19B-BA55BEA6509D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{44495DCD-41BF-4EEB-A19B-BA55BEA6509D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A03F04F-9FAE-40AF-A93E-323E1E251B36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A03F04F-9FAE-40AF-A93E-323E1E251B36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A03F04F-9FAE-40AF-A93E-323E1E251B36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A03F04F-9FAE-40AF-A93E-323E1E251B36}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
