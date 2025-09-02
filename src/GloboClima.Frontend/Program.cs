@@ -10,7 +10,8 @@ builder.Services.AddServerSideBlazor();
 // HTTP Client para consumir a API
 builder.Services.AddHttpClient("GloboclimaAPI", client =>
 {
-    client.BaseAddress = new Uri("https://localhost:7065/");
+    var baseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7065";
+
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 

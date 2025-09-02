@@ -2,16 +2,23 @@
 using Amazon.DynamoDBv2;
 using GloboClima.Core.Interfaces.Repositories;
 using GloboClima.Core.Interfaces.Services;
+using GloboClima.Frontend.Services;
 using GloboClima.Infrastructure.Repositories;
-using GloboClima.Services.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using AuthService = GloboClima.Services.Services.AuthService;
+using CountryService = GloboClima.Services.Services.CountryService;
+using WeatherService = GloboClima.Services.Services.WeatherService;
+
+using AuthServiceFront = GloboClima.Frontend.Services.AuthService;
+using CountryServiceFront = GloboClima.Frontend.Services.CountryService;
+using WeatherServiceFront = GloboClima.Frontend.Services.WeatherService;
+using Microsoft.Extensions.Hosting;
 
 namespace GloboClima.Lambda;
 
@@ -26,21 +33,25 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
-        // Controllers
+        // ✅ API Controllers
         services.AddControllers();
         services.AddEndpointsApiExplorer();
 
-        // DynamoDB
+        // ✅ Blazor Server
+        services.AddRazorPages();
+        services.AddServerSideBlazor();
+
+        // ✅ DynamoDB
         services.AddSingleton<IAmazonDynamoDB>(provider =>
         {
             var config = new AmazonDynamoDBConfig
             {
-                RegionEndpoint = RegionEndpoint.GetBySystemName("us-east-1")
+                RegionEndpoint = RegionEndpoint.USEast1
             };
             return new AmazonDynamoDBClient(config);
         });
 
-        // JWT Authentication
+        // ✅ JWT Authentication
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -57,7 +68,7 @@ public class Startup
                 };
             });
 
-        // HTTP Clients for External APIs
+        // ✅ HTTP Clients for External APIs
         services.AddHttpClient("OpenWeatherMap", client =>
         {
             client.BaseAddress = new Uri("https://api.openweathermap.org/data/2.5/");
@@ -70,7 +81,14 @@ public class Startup
             client.Timeout = TimeSpan.FromSeconds(30);
         });
 
-        // CORS
+        // ✅ HTTP Client para Frontend consumir API (mesma instância)
+        services.AddHttpClient("GloboclimaAPI", client =>
+        {
+            client.BaseAddress = new Uri("http://localhost/"); // API na mesma instância
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        // ✅ CORS
         services.AddCors(options =>
         {
             options.AddPolicy("AllowAll", policy =>
@@ -81,11 +99,17 @@ public class Startup
             });
         });
 
-        // Custom Services
+        // ✅ Custom Services (Backend)
         services.AddScoped<IUserRepository, DynamoDBUserRepository>();
         services.AddScoped<IWeatherService, WeatherService>();
         services.AddScoped<ICountryService, CountryService>();
         services.AddScoped<IAuthService, AuthService>();
+
+        // ✅ Frontend Services
+        services.AddScoped<ApiService>();
+        services.AddScoped<AuthServiceFront>();
+        services.AddScoped<WeatherServiceFront>();
+        services.AddScoped<CountryServiceFront>();
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -95,6 +119,9 @@ public class Startup
             app.UseDeveloperExceptionPage();
         }
 
+        app.UseHttpsRedirection();
+        app.UseStaticFiles();
+
         app.UseCors("AllowAll");
         app.UseAuthentication();
         app.UseAuthorization();
@@ -102,7 +129,13 @@ public class Startup
         app.UseRouting();
         app.UseEndpoints(endpoints =>
         {
+            // ✅ API Routes
             endpoints.MapControllers();
+
+            // ✅ Blazor Routes
+            endpoints.MapRazorPages();
+            endpoints.MapBlazorHub();
+            endpoints.MapFallbackToPage("/_Host");
         });
     }
 }

@@ -67,7 +67,7 @@ ApiFunction:
     Runtime: dotnet9
     Handler: GloboClima.Lambda::GloboClima.Lambda.LambdaEntryPoint::FunctionHandlerAsync
     CodeUri: ./src/GloboClima.Lambda/bin/Release/net9.0/linux-x64/publish/ 
-    MemorySize: 256
+    MemorySize: 512
     Timeout: 30
     Environment:
       Variables:

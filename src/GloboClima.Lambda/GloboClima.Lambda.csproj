@@ -21,6 +21,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\GloboClima.API\GloboClima.API.csproj" />
 		<ProjectReference Include="..\GloboClima.Core\GloboClima.Core.csproj" />
+		<ProjectReference Include="..\GloboClima.Frontend\GloboClima.Frontend.csproj" />
 		<ProjectReference Include="..\GloboClima.Services\GloboClima.Services.csproj" />
 		<ProjectReference Include="..\GloboClima.Infrastructure\GloboClima.Infrastructure.csproj" />
 	</ItemGroup>
