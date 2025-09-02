@@ -21,4 +21,11 @@
     <ProjectReference Include="..\GloboClima.Core\GloboClima.Core.csproj" />
   </ItemGroup>
 
+	<ItemGroup>
+		<Content Remove="$(MSBuildThisFileDirectory)../GloboClima.Frontend/appsettings.json" />
+		<Content Remove="$(MSBuildThisFileDirectory)../GloboClima.Frontend/appsettings.Development.json" />
+		<None Remove="$(MSBuildThisFileDirectory)../GloboClima.Frontend/appsettings.json" />
+		<None Remove="$(MSBuildThisFileDirectory)../GloboClima.Frontend/appsettings.Development.json" />
+	</ItemGroup>
+
 </Project>
