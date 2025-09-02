@@ -11,14 +11,9 @@ namespace GloboClima.Tests.Services
 {
     public class WeatherServiceTests
     {
-        private class FakeHttpMessageHandler : HttpMessageHandler
+        private class FakeHttpMessageHandler(HttpResponseMessage response) : HttpMessageHandler
         {
-            private readonly HttpResponseMessage _response;
-
-            public FakeHttpMessageHandler(HttpResponseMessage response)
-            {
-                _response = response;
-            }
+            private readonly HttpResponseMessage _response = response;
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
@@ -58,7 +53,7 @@ namespace GloboClima.Tests.Services
                 Clouds = new CloudsData { All = 40 },
                 Coord = new CoordData { Lat = -23.55, Lon = -46.63 },
                 Dt = 1693650000,
-                Weather = new List<WeatherInfo> { new WeatherInfo { Main = "Clear", Description = "céu limpo", Icon = "01d" } },
+                Weather = [new WeatherInfo { Main = "Clear", Description = "céu limpo", Icon = "01d" }],
                 Visibility = 10000,
                 Timezone = -10800
             };
@@ -116,14 +111,9 @@ namespace GloboClima.Tests.Services
         }
     }
 
-    public class HttpClientFactoryStub : IHttpClientFactory
+    public class HttpClientFactoryStub(HttpClient client) : IHttpClientFactory
     {
-        private readonly HttpClient _client;
-
-        public HttpClientFactoryStub(HttpClient client)
-        {
-            _client = client;
-        }
+        private readonly HttpClient _client = client;
 
         public HttpClient CreateClient(string name) => _client;
     }
